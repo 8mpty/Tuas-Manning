@@ -1,0 +1,11 @@
+targets:
+  $default:
+    builders:
+      drift_dev:
+        generate_for:
+          - lib/database/*.dart
+        options:
+          sql:
+            dialect: sqlite
+            options:
+              version: "3.38"

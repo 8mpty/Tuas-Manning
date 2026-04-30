@@ -1,0 +1,72 @@
+name: Build and Deploy to Web Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
+      BOT_EMAIL: ${{ secrets.BOT_EMAIL }}
+      WEB_BUILD: ${{ secrets.WEB_BUILD }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.TOKEN }}
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: 'stable'
+      
+      - name: Enable web support
+        run: flutter config --enable-web
+      
+      - name: Get dependencies
+        run: flutter pub get
+      
+      - name: Build web
+        run: flutter build web --release
+      
+      - name: Deploy to github pages branch
+        run: |
+          git config user.name "${BOT_USERNAME}"
+          git config user.email "${BOT_EMAIL}"
+
+          CURRENT_COMMIT=$(git rev-parse --short HEAD)
+          
+          TEMP_DIR=$(mktemp -d)
+          cp -r ${{ github.workspace }}/build/web/* $TEMP_DIR/
+          
+          if git ls-remote --heads origin ${WEB_BUILD} | grep ${WEB_BUILD}; then
+            git checkout ${WEB_BUILD}
+            git pull origin ${WEB_BUILD}
+          else
+            git checkout --orphan ${WEB_BUILD}
+          fi
+          
+          git rm -rf .
+          
+          git clean -fdx
+          
+          cp -rf $TEMP_DIR/* .
+          
+          git add -A --force
+          
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Deploy web build from $CURRENT_COMMIT - $(date '+%Y-%m-%d %H:%M:%S')"
+            git push origin ${WEB_BUILD}
+          fi
+          
+          rm -rf $TEMP_DIR

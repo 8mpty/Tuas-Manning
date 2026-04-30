@@ -130,6 +130,44 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
+  String _getCustomRoleOrder(String applianceCode) {
+    if (applianceCode == 'PL421') {
+      return 'DO,ADO,SC,PO,P1,P2,P3,P4';
+    } else if (applianceCode == 'PL422E') {
+      return 'EMT SC,PO,P1,P2,P3,P4';
+    } else if (applianceCode == 'LF421') {
+      return 'SC,PO,P1,P2,P3,P4';
+    }
+    return '';
+  }
+
+  List<Position> _getSortedPositions(String applianceCode, List<Position> positions) {
+    final customOrder = _getCustomRoleOrder(applianceCode);
+    if (customOrder.isEmpty) {
+      return positions;
+    }
+    
+    final orderList = customOrder.split(',');
+    final sortedPositions = <Position>[];
+    
+    for (var role in orderList) {
+      try {
+        final position = positions.firstWhere((p) => p.role == role);
+        sortedPositions.add(position);
+      } catch (e) {
+        // Role not found, continue
+      }
+    }
+
+    for (var position in positions) {
+      if (!sortedPositions.contains(position)) {
+        sortedPositions.add(position);
+      }
+    }
+    
+    return sortedPositions;
+  }
+
   String _formatManningDetails(ManningRecord record) {
     final StringBuffer buffer = StringBuffer();
     
@@ -143,8 +181,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
       if (positions != null && positions.isNotEmpty) {
         bool hasAnyAssignment = false;
         final roleLines = <String>[];
+
+        final sortedPositions = _getSortedPositions(appliance.code, positions);
         
-        for (var position in positions) {
+        for (var position in sortedPositions) {
           if (position.personnel != null) {
             hasAnyAssignment = true;
             roleLines.add('${position.role}: ${position.personnel!.toString()}');
@@ -204,8 +244,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
       if (positions != null && positions.isNotEmpty) {
         final roleWidgets = <Widget>[];
         bool applianceHasAssignment = false;
+
+        final sortedPositions = _getSortedPositions(appliance.code, positions);
         
-        for (var position in positions) {
+        for (var position in sortedPositions) {
           if (position.personnel != null || position.role == 'CFS') {
             applianceHasAssignment = true;
             hasAnyAssignment = true;

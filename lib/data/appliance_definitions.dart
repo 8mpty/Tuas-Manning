@@ -14,7 +14,7 @@ class ApplianceDefinitions {
       ),
       Appliance(
         code: 'PL421',
-        vehicleNumber: 'XE5303H',
+        vehicleNumber: 'XF826T',
         positions: [
           Position(role: 'DO', personnelType: PersonnelType.firefighter),
           Position(role: 'ADO', personnelType: PersonnelType.firefighter),
@@ -28,10 +28,10 @@ class ApplianceDefinitions {
       ),
       Appliance(
         code: 'PL422E',
-        vehicleNumber: 'XD5979M',
+        vehicleNumber: 'XE5303H',
         positions: [
-          Position(role: 'EMT SC', personnelType: PersonnelType.firefighter),
           Position(role: 'PO', personnelType: PersonnelType.firefighter),
+          Position(role: 'EMT SC', personnelType: PersonnelType.firefighter),
           Position(role: 'P1', personnelType: PersonnelType.firefighter),
           Position(role: 'P2', personnelType: PersonnelType.firefighter),
           Position(role: 'P3', personnelType: PersonnelType.firefighter),
@@ -42,8 +42,8 @@ class ApplianceDefinitions {
         code: 'LF421',
         vehicleNumber: 'GBF3111M',
         positions: [
-          Position(role: 'SC', personnelType: PersonnelType.firefighter),
           Position(role: 'PO', personnelType: PersonnelType.firefighter),
+          Position(role: 'SC', personnelType: PersonnelType.firefighter),
           Position(role: 'P1', personnelType: PersonnelType.firefighter),
           Position(role: 'P2', personnelType: PersonnelType.firefighter),
           Position(role: 'P3', personnelType: PersonnelType.firefighter),
@@ -63,7 +63,7 @@ class ApplianceDefinitions {
       ),
       Appliance(
         code: 'UFM421',
-        vehicleNumber: 'YP2841X',
+        vehicleNumber: 'YP4661K',
         positions: [
           Position(role: 'FP421M', personnelType: PersonnelType.firefighter),
           Position(role: 'P1', personnelType: PersonnelType.firefighter),
@@ -124,7 +124,35 @@ class ApplianceDefinitions {
         code: 'FP421M',
         positions: [
           Position(
-            role: 'PO',
+            role: 'PO (UFM PO)',
+            personnelType: PersonnelType.firefighter,
+            isAutoAssigned: true,
+            autoAssignRole: 'FP421M',
+            autoAssignAppliance: 'UFM421',
+          ),
+          Position(role: 'P1', personnelType: PersonnelType.firefighter),
+          Position(role: 'P2', personnelType: PersonnelType.firefighter),
+        ],
+      ),
+      Appliance(
+        code: 'FP422M',
+        positions: [
+          Position(
+            role: 'PO (UFM PO)',
+            personnelType: PersonnelType.firefighter,
+            isAutoAssigned: true,
+            autoAssignRole: 'FP421M',
+            autoAssignAppliance: 'UFM421',
+          ),
+          Position(role: 'P1', personnelType: PersonnelType.firefighter),
+          Position(role: 'P2', personnelType: PersonnelType.firefighter),
+        ],
+      ),
+      Appliance(
+        code: 'FP421',
+        positions: [
+          Position(
+            role: 'PO (CP PO)',
             personnelType: PersonnelType.firefighter,
             isAutoAssigned: true,
             autoAssignRole: 'PO',
@@ -135,10 +163,10 @@ class ApplianceDefinitions {
         ],
       ),
       Appliance(
-        code: 'FP422M',
+        code: 'FP422',
         positions: [
           Position(
-            role: 'PO',
+            role: 'PO (CP PO)',
             personnelType: PersonnelType.firefighter,
             isAutoAssigned: true,
             autoAssignRole: 'PO',

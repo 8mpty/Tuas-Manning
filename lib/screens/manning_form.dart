@@ -277,6 +277,8 @@ class _ManningFormScreenState extends State<ManningFormScreen> {
                         _updateAutoAssignedPositions('LF421', 'PO');
                       } else if (applianceCode == 'CP421' && position.role == 'PO') {
                         _updateAutoAssignedPositions('CP421', 'PO');
+                      } else if (applianceCode == 'UFM421' && position.role == 'FP421M') {
+                        _updateAutoAssignedPositions('UFM421', 'FP421M');
                       }
                     });
                   },
@@ -292,7 +294,7 @@ class _ManningFormScreenState extends State<ManningFormScreen> {
   
   Widget _buildApplianceCard(Appliance appliance) {
     final positions = _appliancePositions[appliance.code] ?? [];
-    final isAutoAssignedAppliance = appliance.code == 'HSV421' || appliance.code == 'HMV421' || appliance.code == 'FP421M' || appliance.code == 'FP422M';
+    final isAutoAssignedAppliance = appliance.code == 'HSV421' || appliance.code == 'HMV421' || appliance.code == 'FP421M' || appliance.code == 'FP422M' || appliance.code == 'FP421' || appliance.code == 'FP422';
     
     return Card(
       margin: const EdgeInsets.all(8.0),

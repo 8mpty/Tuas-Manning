@@ -6,10 +6,7 @@ import 'package:tuas_manning_2/models/personnel.dart';
 import 'package:tuas_manning_2/models/personnel_type.dart';
 import 'package:tuas_manning_2/services/database_service.dart';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:tuas_manning_2/helpers/export_helper_stub.dart'
-    if (dart.library.html) 'package:tuas_manning_2/helpers/export_helper_web.dart'
-    if (dart.library.io) 'package:tuas_manning_2/helpers/export_helper_mobile.dart';
+import 'package:tuas_manning_2/helpers/export_helper_web.dart';
 
 class PersonnelScreen extends StatefulWidget {
   const PersonnelScreen({super.key});
@@ -301,13 +298,16 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
           break;
       }
 
-      if (person.type == PersonnelType.cfs) {
-        personnelMap[categoryKey]![person.rankAbbreviation] = personData;
-      } else {
-        if (!personnelMap[categoryKey]!.containsKey(person.rankAbbreviation)) {
-          personnelMap[categoryKey]![person.rankAbbreviation] = [];
-        }
-        (personnelMap[categoryKey]![person.rankAbbreviation] as List).add(personData);
+      if (!personnelMap[categoryKey]!.containsKey(person.rankAbbreviation)) {
+        personnelMap[categoryKey]![person.rankAbbreviation] = <dynamic>[];
+      }
+      (personnelMap[categoryKey]![person.rankAbbreviation] as List).add(personData);
+    }
+    final cfsRanks = personnelMap['CFS']!;
+    for (final rank in cfsRanks.keys.toList()) {
+      final officers = cfsRanks[rank] as List;
+      if (officers.length == 1) {
+        cfsRanks[rank] = officers.first;
       }
     }
 
@@ -327,32 +327,16 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
       final fileName = 'rota_${rota}_personnel_export.json';
       final bytes = Uint8List.fromList(utf8.encode(jsonString));
 
-      final path = await exportFile(bytes, fileName);
+      await exportFile(bytes, fileName);
 
       if (mounted) {
-        if (kIsWeb) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Personnel data exported successfully!'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        } else {
-          showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Export Successful'),
-              content: Text('File saved to: $path'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Personnel data exported successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {

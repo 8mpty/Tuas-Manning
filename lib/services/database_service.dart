@@ -28,59 +28,68 @@ class DatabaseService {
     _configBox.put('organization', importData.organization);
     _configBox.put('lastImport', DateTime.now());
     
-    if (importData.personnel.containsKey('CFS')) {
-      final cfsMap = importData.personnel['CFS'] as Map<String, dynamic>;
+    final personnel = importData.personnel;
+    
+    // CFS section supports both { rank: <single person> } and
+    // { rank: [<person>, ...] } so the app can hold multiple CFS officers of
+    // different ranks (MAJ, LTC, COL, etc.) under the single "CFS" title.
+    if (personnel.containsKey('CFS')) {
+      final cfsMap = personnel['CFS'] as Map<String, dynamic>;
       for (final entry in cfsMap.entries) {
-        final personData = entry.value as Map<String, dynamic>;
-        final hp = personData['hp'] as String?;
-        final personnel = Personnel(
-          rankAbbreviation: entry.key,
-          name: personData['name'] as String,
-          fullRank: personData['full_rank'] as String,
-          hp: hp?.trim().isEmpty == true ? null : hp,
-          type: PersonnelType.cfs,
-        );
-        await _personnelBox.put(personnel.id, personnel);
+        await _importRankedPersonnel(entry.key, entry.value, PersonnelType.cfs);
       }
     }
     
-    if (importData.personnel.containsKey('Firefighters')) {
-      final ffMap = importData.personnel['Firefighters'] as Map<String, dynamic>;
-      for (final rankEntry in ffMap.entries) {
-        final rankList = rankEntry.value as List<dynamic>;
-        for (final personData in rankList) {
-          final personMap = personData as Map<String, dynamic>;
-          final hp = personMap['hp'] as String?;
-          final personnel = Personnel(
-            rankAbbreviation: rankEntry.key,
-            name: personMap['name'] as String,
-            fullRank: personMap['full_rank'] as String,
-            hp: hp?.trim().isEmpty == true ? null : hp,
-            type: PersonnelType.firefighter,
-          );
-          await _personnelBox.put(personnel.id, personnel);
-        }
+    if (personnel.containsKey('Firefighters')) {
+      final ffMap = personnel['Firefighters'] as Map<String, dynamic>;
+      for (final entry in ffMap.entries) {
+        await _importRankedPersonnel(entry.key, entry.value, PersonnelType.firefighter);
       }
     }
     
-    if (importData.personnel.containsKey('Alpha')) {
-      final alphaMap = importData.personnel['Alpha'] as Map<String, dynamic>;
-      for (final rankEntry in alphaMap.entries) {
-        final rankList = rankEntry.value as List<dynamic>;
-        for (final personData in rankList) {
-          final personMap = personData as Map<String, dynamic>;
-          final hp = personMap['hp'] as String?;
-          final personnel = Personnel(
-            rankAbbreviation: rankEntry.key,
-            name: personMap['name'] as String,
-            fullRank: personMap['full_rank'] as String,
-            hp: hp?.trim().isEmpty == true ? null : hp,
-            type: PersonnelType.alpha,
-          );
-          await _personnelBox.put(personnel.id, personnel);
-        }
+    if (personnel.containsKey('Alpha')) {
+      final alphaMap = personnel['Alpha'] as Map<String, dynamic>;
+      for (final entry in alphaMap.entries) {
+        await _importRankedPersonnel(entry.key, entry.value, PersonnelType.alpha);
       }
     }
+  }
+  
+  Future<void> _importRankedPersonnel(
+    String rankAbbreviation,
+    dynamic rankValue,
+    PersonnelType type,
+  ) async {
+    if (rankValue is List) {
+      for (final item in rankValue) {
+        if (item is Map) {
+          await _saveImportedPerson(rankAbbreviation, item as Map<String, dynamic>, type);
+        }
+      }
+    } else if (rankValue is Map) {
+      await _saveImportedPerson(rankAbbreviation, rankValue as Map<String, dynamic>, type);
+    }
+  }
+  
+  Future<void> _saveImportedPerson(
+    String rankAbbreviation,
+    Map<String, dynamic> personData,
+    PersonnelType type,
+  ) async {
+    final name = personData['name'];
+    if (name is! String || name.trim().isEmpty) {
+      return;
+    }
+    
+    final rawHp = personData['hp'] as String?;
+    final personnel = Personnel(
+      rankAbbreviation: rankAbbreviation,
+      name: name,
+      fullRank: (personData['full_rank'] as String?) ?? rankAbbreviation,
+      hp: rawHp?.trim().isEmpty == true ? null : rawHp,
+      type: type,
+    );
+    await _personnelBox.put(personnel.id, personnel);
   }
   
   List<Personnel> getAllPersonnel() {
@@ -107,12 +116,8 @@ class DatabaseService {
   }
   
   Personnel? getCFSPersonnel() {
-    try {
-      return _personnelBox.values
-          .firstWhere((person) => person.type == PersonnelType.cfs);
-    } catch (e) {
-      return null;
-    }
+    final cfsPersonnel = getPersonnelByType(PersonnelType.cfs);
+    return cfsPersonnel.isEmpty ? null : cfsPersonnel.first;
   }
   
   Future<void> savePersonnel(Personnel personnel) async {

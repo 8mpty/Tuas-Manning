@@ -21,9 +21,10 @@ class _ManningFormScreenState extends State<ManningFormScreen> {
   late Map<String, List<Position>> _appliancePositions;
   late DatabaseService _dbService;
   List<Personnel> _allPersonnel = [];
-  Personnel? _cfsPersonnel;
+  Personnel? _defaultCfsPersonnel;
   DateTime? _selectedDate;
   final _formKey = GlobalKey<FormState>();
+  final Set<String> _manuallyOverriddenPositions = <String>{};
   
   @override
   void initState() {
@@ -33,32 +34,76 @@ class _ManningFormScreenState extends State<ManningFormScreen> {
     _selectedDate = widget.existingRecord?.date ?? DateTime.now();
   }
   
+  String _positionKey(String applianceCode, String role) => '$applianceCode|$role';
+  
   void _initializeData() {
     _dbService.cleanupDuplicates();
     _appliances = ApplianceDefinitions.getAppliances();
     _allPersonnel = _dbService.getAllPersonnel();
-    _cfsPersonnel = _dbService.getCFSPersonnel();
-    
-    _appliancePositions = {};
-    
-    for (var appliance in _appliances) {
-      final positions = List<Position>.from(appliance.positions);
-      
-      for (var position in positions) {
-        if (position.role == 'CFS' && _cfsPersonnel != null) {
-          position.personnel = _cfsPersonnel;
-        }
-      }
-      
-      _appliancePositions[appliance.code] = positions;
-    }
+    _defaultCfsPersonnel = _dbService.getCFSPersonnel();
     
     if (widget.existingRecord != null) {
       _appliancePositions = widget.existingRecord!.appliances;
       _reLinkPersonnelObjects();
+      _detectManualOverrides();
+    } else {
+      _appliancePositions = {};
+      for (var appliance in _appliances) {
+        _appliancePositions[appliance.code] = List<Position>.from(appliance.positions);
+      }
     }
+    _applyDefaultAutoAssignments();
+  }
+
+  void _detectManualOverrides() {
+    for (var applianceEntry in _appliancePositions.entries) {
+      for (var position in applianceEntry.value) {
+        if (!position.isAutoAssigned) continue;
+        if (position.autoAssignAppliance == null || position.autoAssignRole == null) continue;
+        
+        final sourcePersonnel = _getPersonnelFromAppliance(
+          position.autoAssignAppliance!,
+          position.autoAssignRole!,
+        );
+        
+        final isSynced = sourcePersonnel != null &&
+            position.personnel != null &&
+            sourcePersonnel.id == position.personnel!.id;
+        final bothEmpty = sourcePersonnel == null && position.personnel == null;
+        
+        if (!isSynced && !bothEmpty) {
+          _manuallyOverriddenPositions.add(_positionKey(applianceEntry.key, position.role));
+        }
+      }
+    }
+  }
+  
+  void _applyDefaultAutoAssignments() {
+    final bool isNewManning = widget.existingRecord == null;
     
-    _applyAutoAssignments();
+    for (var applianceEntry in _appliancePositions.entries) {
+      for (var position in applianceEntry.value) {
+        if (position.isAutoAssigned) {
+          final key = _positionKey(applianceEntry.key, position.role);
+          if (_manuallyOverriddenPositions.contains(key)) continue;
+          if (position.personnel != null) continue;
+          if (position.autoAssignAppliance == null || position.autoAssignRole == null) continue;
+          
+          position.personnel = _getPersonnelFromAppliance(
+            position.autoAssignAppliance!,
+            position.autoAssignRole!,
+          );
+          continue;
+        }
+
+        if (isNewManning &&
+            position.role == 'CFS' &&
+            position.personnelType == PersonnelType.cfs &&
+            position.personnel == null) {
+          position.personnel = _defaultCfsPersonnel;
+        }
+      }
+    }
   }
   
   void _reLinkPersonnelObjects() {
@@ -92,35 +137,19 @@ class _ManningFormScreenState extends State<ManningFormScreen> {
     return null;
   }
   
-  void _applyAutoAssignments() {
-    for (var applianceEntry in _appliancePositions.entries) {
-      for (var position in applianceEntry.value) {
-        if (position.isAutoAssigned) {
-          final sourceAppliance = position.autoAssignAppliance;
-          final sourceRole = position.autoAssignRole;
-          
-          if (sourceAppliance != null && sourceRole != null) {
-            final sourcePersonnel = _getPersonnelFromAppliance(sourceAppliance, sourceRole);
-            if (sourcePersonnel != null) {
-              position.personnel = sourcePersonnel;
-            }
-          }
-        }
-      }
-    }
-  }
-  
-  void _updateAutoAssignedPositions(String updatedApplianceCode, String updatedRole) {
+  void _updateAutoAssignedPositions(String sourceApplianceCode, String sourceRole) {
+    final sourcePersonnel = _getPersonnelFromAppliance(sourceApplianceCode, sourceRole);
+    
     for (var applianceEntry in _appliancePositions.entries) {
       for (var position in applianceEntry.value) {
         if (position.isAutoAssigned &&
-            position.autoAssignAppliance == updatedApplianceCode &&
-            position.autoAssignRole == updatedRole) {
+            position.autoAssignAppliance == sourceApplianceCode &&
+            position.autoAssignRole == sourceRole) {
           
-          final sourcePersonnel = _getPersonnelFromAppliance(updatedApplianceCode, updatedRole);
-          setState(() {
-            position.personnel = sourcePersonnel;
-          });
+          final key = _positionKey(applianceEntry.key, position.role);
+          if (_manuallyOverriddenPositions.contains(key)) continue;
+          
+          position.personnel = sourcePersonnel;
         }
       }
     }
@@ -160,8 +189,6 @@ class _ManningFormScreenState extends State<ManningFormScreen> {
       );
       return;
     }
-    
-    _applyAutoAssignments();
     
     final config = _dbService.getConfig();
     final recordId = widget.existingRecord?.id ?? 
@@ -204,89 +231,102 @@ class _ManningFormScreenState extends State<ManningFormScreen> {
       uniquePersonnel[person.id] = person;
     }
     
+    if (position.personnel != null) {
+      uniquePersonnel[position.personnel!.id] = position.personnel!;
+    }
+    
     return uniquePersonnel.values.toList()..sort(Personnel.compareByRank);
   }
   
   Widget _buildPositionDropdown(Position position, String applianceCode) {
-    final isAutoAssigned = position.isAutoAssigned;
-    final bool isReadOnly = isAutoAssigned;
+    final bool isAutoLinked = position.isAutoAssigned;
+    final bool isOverridden = isAutoLinked &&
+        _manuallyOverriddenPositions.contains(_positionKey(applianceCode, position.role));
     final availablePersonnel = _getAvailablePersonnelForPosition(position, applianceCode);
     
     return Row(
       children: [
         SizedBox(
-          width: 80,
+          width: 84,
           child: Text(
             '${position.role}:',
             style: TextStyle(
               fontWeight: FontWeight.w500,
-              color: isReadOnly ? Colors.grey : Theme.of(context).colorScheme.onSurface,
+              fontSize: 13,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
         ),
-        const SizedBox(width: 8),
+        if (isAutoLinked) ...[
+          Tooltip(
+            message: isOverridden
+                ? 'Manually changed - no longer follows its linked vehicle'
+                : 'Auto-assigned from linked vehicle (editable)',
+            child: Icon(
+              isOverridden ? Icons.edit_outlined : Icons.link,
+              size: 15,
+              color: isOverridden
+                  ? Colors.orangeAccent
+                  : Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 6),
+        ],
         Expanded(
-          child: isReadOnly
-              ? Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.withOpacity(0.3)),
-                    borderRadius: BorderRadius.circular(4),
-                    color: Colors.grey.withOpacity(0.1),
-                  ),
-                  child: Text(
-                    position.personnel?.toString() ?? 'NULL',
-                    style: TextStyle(
-                      color: position.personnel != null ? Colors.blue : Colors.grey,
-                      fontStyle: position.personnel == null ? FontStyle.italic : FontStyle.normal,
-                    ),
-                  ),
-                )
-              : DropdownButton<Personnel?>(
-                  value: position.personnel,
-                  isExpanded: true,
-                  underline: Container(height: 0),
-                  items: [
-                    DropdownMenuItem<Personnel?>(
-                      value: null,
-                      child: Text(
-                        'NULL',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ),
-                    ...availablePersonnel.map((personnel) {
-                      return DropdownMenuItem<Personnel?>(
-                        value: personnel,
-                        child: Text(
-                          personnel.toString(),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    }).toList(),
-                  ],
-                  onChanged: (Personnel? newValue) {
-                    setState(() {
-                      position.personnel = newValue;
-                      
-                      if (applianceCode == 'PL421' && position.role == 'SC') {
-                        _updateAutoAssignedPositions('PL421', 'SC');
-                      } else if (applianceCode == 'LF421' && position.role == 'PO') {
-                        _updateAutoAssignedPositions('LF421', 'PO');
-                      } else if (applianceCode == 'CP421' && position.role == 'PO') {
-                        _updateAutoAssignedPositions('CP421', 'PO');
-                      } else if (applianceCode == 'UFM421' && position.role == 'FP421M') {
-                        _updateAutoAssignedPositions('UFM421', 'FP421M');
-                      }
-                    });
-                  },
+          child: DropdownButton<Personnel?>(
+            value: position.personnel,
+            isExpanded: true,
+            underline: Container(height: 0),
+            items: [
+              DropdownMenuItem<Personnel?>(
+                value: null,
+                child: Text(
+                  'NULL',
                   style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface,
-                    fontSize: 14,
+                    color: Theme.of(context).colorScheme.error,
+                    fontStyle: FontStyle.italic,
                   ),
                 ),
+              ),
+              ...availablePersonnel.map((personnel) {
+                return DropdownMenuItem<Personnel?>(
+                  value: personnel,
+                  child: Text(
+                    personnel.toString(),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                );
+              }).toList(),
+            ],
+            onChanged: (Personnel? newValue) {
+              setState(() {
+                position.personnel = newValue;
+                
+                if (isAutoLinked) {
+                  final source = position.autoAssignAppliance != null &&
+                          position.autoAssignRole != null
+                      ? _getPersonnelFromAppliance(
+                          position.autoAssignAppliance!,
+                          position.autoAssignRole!,
+                        )
+                      : null;
+                  final sameAsSource = (source == null && newValue == null) ||
+                      (source != null && newValue != null && source.id == newValue.id);
+                  final key = _positionKey(applianceCode, position.role);
+                  if (sameAsSource) {
+                    _manuallyOverriddenPositions.remove(key);
+                  } else {
+                    _manuallyOverriddenPositions.add(key);
+                  }
+                }
+                _updateAutoAssignedPositions(applianceCode, position.role);
+              });
+            },
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 14,
+            ),
+          ),
         ),
       ],
     );
@@ -295,6 +335,9 @@ class _ManningFormScreenState extends State<ManningFormScreen> {
   Widget _buildApplianceCard(Appliance appliance) {
     final positions = _appliancePositions[appliance.code] ?? [];
     final isAutoAssignedAppliance = appliance.code == 'HSV421' || appliance.code == 'HMV421' || appliance.code == 'FP421M' || appliance.code == 'FP422M' || appliance.code == 'FP421' || appliance.code == 'FP422';
+    final bool hasCfsAssigned = positions.any(
+      (p) => p.role == 'CFS' && p.personnel != null,
+    );
     
     return Card(
       margin: const EdgeInsets.all(8.0),
@@ -315,34 +358,40 @@ class _ManningFormScreenState extends State<ManningFormScreen> {
                   ),
                 ),
                 if (isAutoAssignedAppliance)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
-                    ),
-                    child: const Text(
-                      'Auto-assigned',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue,
+                  Tooltip(
+                    message: 'Some roles are auto-assigned from a linked vehicle. You can still change them.',
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                      ),
+                      child: const Text(
+                        'Auto-assigned',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue,
+                        ),
                       ),
                     ),
                   ),
-                if (appliance.code == 'IV421' && _cfsPersonnel != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-                    ),
-                    child: const Text(
-                      'CFS Auto-filled',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.green,
+                if (appliance.code == 'IV421' && hasCfsAssigned)
+                  Tooltip(
+                    message: 'Pick which CFS officer takes this manning',
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                      ),
+                      child: const Text(
+                        'CFS',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green,
+                        ),
                       ),
                     ),
                   ),

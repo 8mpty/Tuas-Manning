@@ -88,7 +88,7 @@ class ApplianceDefinitions {
         vehicleNumber: 'YP9815B',
         positions: [
           Position(
-            role: 'SC',
+            role: 'SC (DO SC)',
             personnelType: PersonnelType.firefighter,
             isAutoAssigned: true,
             autoAssignRole: 'SC',
@@ -103,7 +103,7 @@ class ApplianceDefinitions {
         vehicleNumber: 'YP1824C',
         positions: [
           Position(
-            role: 'PO',
+            role: 'PO (LF PO)',
             personnelType: PersonnelType.firefighter,
             isAutoAssigned: true,
             autoAssignRole: 'PO',

@@ -47,7 +47,16 @@ enum Rank {
   cp(-30, 'CP'),
   
   @HiveField(14)
-  unknown(-100, '');
+  unknown(-100, ''),
+  
+  @HiveField(15)
+  cpt(85, 'CPT'),
+  
+  @HiveField(16)
+  ltc(92, 'LTC'),
+  
+  @HiveField(17)
+  col(95, 'COL');
 
   final int priority;
   final String abbreviation;
@@ -67,6 +76,9 @@ enum Rank {
     if (abbr == 'LTA') return lta;
     if (abbr == 'MAJ') return maj;
     if (abbr == 'CFS') return cfs;
+    if (abbr == 'CPT') return cpt;
+    if (abbr == 'LTC') return ltc;
+    if (abbr == 'COL') return col;
     if (abbr == 'SGT3' || abbr == 'SGT 3') return sgt3;
     if (abbr == 'SGT2' || abbr == 'SGT 2') return sgt2;
     if (abbr == 'SGT1' || abbr == 'SGT 1') return sgt1;

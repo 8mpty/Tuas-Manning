@@ -43,6 +43,12 @@ class RankAdapter extends TypeAdapter<Rank> {
         return Rank.cp;
       case 14:
         return Rank.unknown;
+      case 15:
+        return Rank.cpt;
+      case 16:
+        return Rank.ltc;
+      case 17:
+        return Rank.col;
       default:
         return Rank.cfs;
     }
@@ -81,6 +87,12 @@ class RankAdapter extends TypeAdapter<Rank> {
         writer.writeByte(13);
       case Rank.unknown:
         writer.writeByte(14);
+      case Rank.cpt:
+        writer.writeByte(15);
+      case Rank.ltc:
+        writer.writeByte(16);
+      case Rank.col:
+        writer.writeByte(17);
     }
   }
 
